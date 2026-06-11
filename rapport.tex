@@ -1,0 +1,841 @@
+\documentclass[11pt,a4paper]{article}
+
+% ----------------------------- Encodage / langue -----------------------------
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[protrusion=true,expansion=false]{microtype}
+
+% ----------------------------- Maths -----------------------------
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+
+% ----------------------------- Mise en page -----------------------------
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage[colorlinks=true,linkcolor=NavyBlue,citecolor=NavyBlue,urlcolor=NavyBlue]{hyperref}
+
+\definecolor{NavyBlue}{HTML}{1F5FA8}
+\definecolor{Accent}{HTML}{C0392B}
+\definecolor{LightGray}{HTML}{F4F6F9}
+\definecolor{CodeKw}{HTML}{1F5FA8}
+\definecolor{CodeStr}{HTML}{218C5A}
+\definecolor{CodeCom}{HTML}{888888}
+
+% ----------------------------- Code -----------------------------
+\usepackage{listings}
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{CodeKw}\bfseries,
+  stringstyle=\color{CodeStr},
+  commentstyle=\color{CodeCom}\itshape,
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=8pt,
+  backgroundcolor=\color{LightGray},
+  frame=single, rulecolor=\color{gray!40},
+  breaklines=true, showstringspaces=false,
+  xleftmargin=1.6em, framexleftmargin=1.6em,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ê}{{\^e}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {ç}{{\c c}}1 {û}{{\^u}}1 {É}{{\'E}}1
+}
+
+% ----------------------------- Théorèmes -----------------------------
+\theoremstyle{plain}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemme}{Lemme}
+\newtheorem{theoreme}{Théorème}
+\theoremstyle{remark}
+\newtheorem*{remarque}{Remarque}
+
+% ----------------------------- En-têtes -----------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\itshape Résolution d'une EDO d'ordre 2}
+\fancyhead[R]{\small ING1 — 2025--2026}
+\fancyfoot[C]{\thepage}
+
+% ----------------------------- Macros -----------------------------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\dd}{\,\mathrm{d}}
+
+\begin{document}
+
+% =========================================================================
+% PAGE DE TITRE
+% =========================================================================
+\begin{titlepage}
+{\raggedleft\includegraphics[width=3.2cm]{logo_cytech.png}\par}
+\centering
+\vspace*{0.4cm}
+{\large CY Tech — CY Cergy Paris Université}\\[0.3cm]
+{\normalsize Filière Mathématiques Appliquées et Science des Données}\\[0.2cm]
+{\normalsize Année universitaire 2025--2026}\\[2.2cm]
+
+\rule{\linewidth}{0.4pt}\\[0.5cm]
+{\Huge\bfseries Résolution d'une équation différentielle d'ordre deux}\\[0.6cm]
+{\Large Analyse théorique, synthèse et implémentation numérique}\\[0.4cm]
+\rule{\linewidth}{0.4pt}\\[0.3cm]
+\vspace{2.0cm}
+
+{\large\bfseries Étudiants}\\[0.4cm]
+\begin{tabular}{c}
+  Arun Kuganesan \quad\textbullet\quad Haytham Bouhou \quad\textbullet\quad Jérémie Konda\\[0.25cm]
+  Amine Taki \quad\textbullet\quad Ulysse Beqiraj\\
+\end{tabular}\\[2.0cm]
+
+{\large\bfseries Projet GM \& MF — ING1}\\[2.2cm]
+
+\vfill
+{\normalsize Date de rendu : juin 2026}
+\end{titlepage}
+
+% =========================================================================
+% RÉSUMÉ
+% =========================================================================
+\thispagestyle{fancy}
+\section*{Résumé}
+\addcontentsline{toc}{section}{Résumé}
+
+Ce projet étudie une équation différentielle d'ordre deux sur la droite réelle,
+dépendant de deux paramètres strictement positifs $\mu$ et $c$. La question
+centrale est de déterminer pour quelles valeurs de ces paramètres il existe une
+solution réalisant une \emph{transition} (un \emph{front}) reliant le palier $c$
+en $-\infty$ au palier $0$ en $+\infty$.
+
+Le travail comporte trois volets. Le premier, \textbf{analytique}, montre qu'une
+telle solution impose des contraintes précises sur $(\mu,c)$, exprimées au moyen
+d'une fonction auxiliaire $P$ : ceci justifie un algorithme de recherche des
+paramètres. Le deuxième, de \textbf{synthèse}, établit la réciproque : sous ces
+contraintes, une solution existe et est unique à translation près. Le troisième
+propose une \textbf{implémentation Python} des deux fonctions demandées. Nous
+exhibons en outre une \emph{solution analytique exacte} dans le cas modèle, qui
+sert de référence pour valider le code (erreur de l'ordre de $10^{-10}$), et nous
+discutons de façon critique le domaine de validité de l'algorithme. Le problème
+se rattache à la théorie des fronts d'onde des équations de réaction–diffusion
+de type \emph{Allen–Cahn / Nagumo}.
+
+\newpage
+\tableofcontents
+\newpage
+
+% =========================================================================
+% 1. INTRODUCTION ET ÉTAT DE L'ART
+% =========================================================================
+\section{Introduction et état de l'art}
+
+\subsection{Contexte}
+L'équation étudiée,
+\[
+  -Q'' + \mu Q + g(Q) = 0 \quad \text{sur } \R,
+  \qquad Q(-\infty)=c,\ Q(+\infty)=0,
+\]
+est l'\emph{équation de profil} associée aux ondes stationnaires d'une équation
+d'évolution de type réaction–diffusion
+\[
+  u_t = u_{xx} - \mu u - g(u).
+\]
+En cherchant une onde progressive de vitesse nulle $u(t,x)=Q(x)$, on retombe
+exactement sur notre problème : $Q$ décrit le \emph{front} qui relie deux états
+d'équilibre. Ces équations modélisent des phénomènes de transition de phase, de
+propagation en génétique des populations et de transmission de l'influx nerveux.
+
+\subsection{Travaux de référence}
+La structure mathématique sous-jacente — une non-linéarité \emph{bistable}
+$R(u)=\mu u+g(u)$ admettant trois zéros — est celle de l'équation
+d'\textbf{Allen–Cahn}, introduite en 1979 pour décrire le mouvement des parois
+d'antiphase dans les alliages~\cite{allencahn1979}, et de l'équation de
+\textbf{Nagumo} en neurophysiologie~\cite{nagumo1962}. L'analyse rigoureuse de
+l'existence, de l'unicité (à translation près) et de la stabilité de ces fronts
+remonte aux travaux fondateurs de \textbf{Fife et McLeod}~\cite{fifemcleod1977},
+qui emploient une méthode de plan de phase, et de \textbf{Aronson et
+Weinberger}~\cite{aronsonweinberger1978}. Historiquement, l'étude des fronts de
+réaction–diffusion débute avec l'équation de
+\textbf{Kolmogorov–Petrovsky–Piskunov}~\cite{kpp1937}, dans le cas monostable.
+
+Le présent projet retrouve, par des moyens élémentaires (conservation d'une
+\emph{énergie}, séparation des variables, théorème de Cauchy–Lipschitz), un cas
+particulier de ces résultats : l'existence et l'unicité d'un front pour le
+potentiel à \emph{puits de profondeur égale}. La condition d'égalité des puits
+correspond à la condition dite \emph{de Maxwell}, classique en thermodynamique
+des transitions de phase. Les outils analytiques mobilisés (méthode de l'énergie,
+plan de phase) sont standard et exposés dans~\cite{evans2010,strogatz2015}.
+
+\subsection{La condition de Maxwell}
+\label{sec:maxwell}
+La condition $P'(c)=0$ admet une interprétation thermodynamique éclairante.
+Posons $R(y)=\mu y+g(y)$ le terme de réaction. La condition $\mu=P(c)$, soit
+$f(c)=\mu c^2+2G(c)=0$, se réécrit
+\[
+  \int_0^c R(y)\dd y=\Big[\tfrac{\mu}{2}y^2+G(y)\Big]_0^c
+  =\tfrac{\mu}{2}c^2+G(c)=0.
+\]
+Autrement dit, \emph{l'aire algébrique de $R$ entre les deux équilibres $0$ et
+$c$ est nulle}. C'est la célèbre \emph{condition de Maxwell} (ou règle des aires
+égales) : les deux « puits » du potentiel
+$W(y)=-\int_0^y R$ ont la même profondeur. Physiquement, c'est exactement le cas
+où aucune des deux phases n'est favorisée, ce qui produit un front
+\emph{stationnaire} (vitesse nulle). Nous reviendrons sur le rôle de cette
+symétrie au paragraphe~\ref{sec:nonsym}, en discutant ce qui se passe lorsqu'elle
+est rompue.
+
+\subsection*{Applications}
+Au-delà des mathématiques, ces fronts modélisent des phénomènes physiques
+concrets : la \emph{séparation de phases} dans les alliages métalliques
+(Allen–Cahn), la \emph{propagation de l'influx nerveux} le long d'un axone
+(Nagumo), la \emph{diffusion de gènes} dans une population (KPP), ou encore les
+\emph{fronts de combustion}. Dans tous ces cas, $Q$ représente le profil
+spatial qui sépare deux états stables, et la question « pour quels paramètres un
+tel profil existe-t-il ? » est précisément celle que ce projet résout.
+
+\subsection{Objectifs et plan}
+Nos objectifs sont : (i) démontrer la nécessité des conditions de l'algorithme
+(Partie~\ref{sec:analyse}) ; (ii) en établir la suffisance et l'unicité
+(Partie~\ref{sec:synthese}) ; (iii) implémenter et valider numériquement la
+méthode (Partie~\ref{sec:numerique}).
+
+% =========================================================================
+% 2. PRÉSENTATION DU PROBLÈME
+% =========================================================================
+\section{Présentation du problème}
+
+\subsection{Cadre et notations}
+On se donne $g\in\mathcal{C}^2(\R,\R)$ vérifiant $g(0)=g'(0)=0$, et l'on pose
+\[
+  G(y)=\int_0^y g(t)\dd t.
+\]
+On cherche une fonction $Q\in\mathcal{C}^2(\R)$ et des paramètres $\mu,c>0$ tels
+que
+\begin{equation}\label{eq:edo}
+  \begin{cases}
+    -Q''(x)+\mu Q(x)+g(Q(x))=0 & \forall x\in\R,\\[2pt]
+    Q(+\infty)=0,\quad Q(-\infty)=c.
+  \end{cases}
+\end{equation}
+Intuitivement, on cherche un \emph{profil de transition} régulier descendant de
+$c$ vers $0$, avec deux paliers horizontaux aux extrémités.
+
+\subsection{L'algorithme proposé}
+On introduit $P:(0,+\infty)\to\R$ définie par
+\[
+  P(x)=-\frac{2G(x)}{x^2}.
+\]
+L'algorithme recherche les valeurs $c>0$ telles que
+\begin{enumerate}[label=(\roman*),leftmargin=2.2em]
+  \item $P'(c)=0$ ;
+  \item $P(c)>0$ ;
+  \item $P(x)<P(c)$ pour tout $x\in[0,c[$.
+\end{enumerate}
+Pour un tel $c$, on pose $\mu=P(c)$. L'objectif est de prouver que cet algorithme
+capture \emph{exactement} toutes les solutions de~\eqref{eq:edo}.
+
+% =========================================================================
+% 3. PARTIE 1 : ANALYSE
+% =========================================================================
+\section{Partie 1 : Analyse}
+\label{sec:analyse}
+
+Dans toute cette partie, on suppose qu'il existe $Q\in\mathcal{C}^2(\R)$ solution
+de~\eqref{eq:edo} pour des paramètres $\mu,c>0$.
+
+\subsection{Une quantité conservée}
+On définit
+\[
+  H(x)=\frac{Q'(x)^2}{2}-G(Q(x))-\frac{\mu}{2}Q(x)^2,
+\]
+qui joue le rôle d'une \emph{énergie mécanique} (terme cinétique plus terme
+potentiel). En dérivant,
+\[
+  H'(x)=Q'(x)\big[Q''(x)-\mu Q(x)-g(Q(x))\big]=0
+\]
+d'après~\eqref{eq:edo}, donc $H$ est constante. En évaluant en $+\infty$, où
+$Q\to0$ (donc $G(Q)\to G(0)=0$) et $Q'\to0$, on obtient $H\equiv0$, c'est-à-dire
+l'identité centrale
+\begin{equation}\label{eq:energie}
+  Q'(x)^2 = \mu Q(x)^2 + 2G(Q(x)) =: f(Q(x)),
+  \qquad f(y):=\mu y^2+2G(y).
+\end{equation}
+
+\begin{remarque}
+La convergence $Q'\to0$ se justifie ainsi : comme $Q''=\mu Q+g(Q)$ admet une
+limite finie en $+\infty$, si cette limite était non nulle alors $Q'$, et donc
+$Q$, divergerait — ce qui contredit $Q\to0$. La limite de $Q''$ est donc nulle,
+et celle de $Q'$ aussi.
+\end{remarque}
+
+\subsection{Positivité du second membre près de $0$}
+Comme $g(0)=g'(0)=0$, la formule de Taylor donne $g(t)=O(t^2)$, d'où
+$G(y)=O(y^3)$. Ainsi, pour $y>0$,
+\[
+  f(y)=y^2\!\left(\mu+\frac{2G(y)}{y^2}\right)\xrightarrow[y\to0^+]{}\ \mu\,y^2>0.
+\]
+Le second membre de~\eqref{eq:energie} est donc strictement positif pour $y>0$
+assez petit.
+
+\subsection{Réduction à une EDO d'ordre 1}
+De~\eqref{eq:energie} on tire $Q'(x)=\eps(x)\sqrt{f(Q(x))}$ avec
+$\eps(x)\in\{-1,+1\}$. Montrons que $\eps$ est \emph{globalement constant}.
+Comme $Q'$ est continue, un changement de signe de $\eps$ imposerait l'annulation
+de $Q'$ en un point $x_0$, donc $f(Q(x_0))=0$ ; le couple $(Q(x_0),0)$ serait une
+donnée de Cauchy de l'EDO d'ordre 2. \emph{Si} $Q(x_0)$ est un point d'équilibre
+(c'est-à-dire $\mu Q(x_0)+g(Q(x_0))=0$), la solution constante convient et
+Cauchy–Lipschitz force $Q$ à être constante — impossible car $Q(-\infty)=c\neq0$.
+Sinon, $Q$ traverse $x_0$ avec $Q''(x_0)\neq0$, et l'on montre ci-dessous
+(Prop.~\ref{prop:fpos}) que ce cas ne se produit pas sur $]0,c[$. Dans tous les
+cas $\eps$ est constant.
+
+\subsection{Le second membre ne s'annule pas sur $]0,c[$}
+\begin{proposition}\label{prop:fpos}
+Pour tout $y\in\,]0,c[$, on a $f(y)>0$.
+\end{proposition}
+
+\begin{proof}
+Par continuité de $Q$ et puisque $Q(-\infty)=c$, $Q(+\infty)=0$, le théorème des
+valeurs intermédiaires assure que $Q$ prend \emph{toute} valeur de $]0,c[$.
+Comme $f(Q(x))=Q'(x)^2\ge0$, on a déjà $f\ge0$ sur $]0,c[$.
+
+Supposons par l'absurde $f(y_0)=0$ pour un $y_0\in\,]0,c[$, et soit $x_0$ tel que
+$Q(x_0)=y_0$ ; alors $Q'(x_0)=0$. Rappelons que
+\[
+  f'(y)=2\mu y+2g(y)=2\big(\mu y+g(y)\big),
+  \qquad\text{donc}\qquad f'(y_0)=2\,Q''(x_0).
+\]
+Deux cas se présentent.
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{Si} $\mu y_0+g(y_0)\neq0$ : alors $f'(y_0)\neq0$, donc $f$
+  \emph{change de signe} en $y_0$. Il existerait alors des points de $]0,c[$ où
+  $f<0$, ce qui contredit $f\ge0$ établi ci-dessus.
+  \item \textbf{Si} $\mu y_0+g(y_0)=0$ : alors $y_0$ est un point d'équilibre, et
+  la fonction constante $\equiv y_0$ est solution de l'EDO d'ordre 2 avec donnée
+  de Cauchy $(y_0,0)$. Par unicité de Cauchy–Lipschitz, $Q\equiv y_0$, ce qui
+  contredit $Q(+\infty)=0\neq y_0$.
+\end{itemize}
+Les deux cas sont absurdes, donc $f(y)>0$ sur $]0,c[$.
+\end{proof}
+
+\begin{remarque}
+La preuve corrige une erreur fréquente : la fonction constante $y_0$ est solution
+de l'EDO \emph{si et seulement si} $\mu y_0+g(y_0)=0$ (équilibre), et \emph{non}
+si $f(y_0)=0$. Ces deux conditions ne coïncident qu'aux bords $0$ et $c$,
+précisément parce que $f'=2(\mu y+g)$.
+\end{remarque}
+
+\subsection{$Q$ est décroissante}
+Pour $x$ grand, $Q(x)\to0^+$ et $f(Q(x))>0$ : $Q$ décroît vers $0$ par valeurs
+positives, donc $Q'(x)<0$. Comme $\sqrt{f(Q(x))}>0$, ceci impose $\eps=-1$. Ainsi
+\[
+  Q'(x)=-\sqrt{f(Q(x))}<0\qquad\forall x\in\R,
+\]
+la stricte négativité venant de la Proposition~\ref{prop:fpos}. La fonction $Q$
+est strictement décroissante.
+
+\subsection{Condition d'équilibre en $c$}
+En passant à la limite $x\to-\infty$ dans $Q''=\mu Q+g(Q)$ (avec $Q\to c$,
+$Q'\to0$, donc $Q''\to0$) :
+\[
+  0=\mu c+g(c)\quad\Longrightarrow\quad g(c)=-\mu c<0.
+\]
+Le point $c$ est donc un équilibre de $\mu y+g(y)=0$.
+
+\subsection{Nécessité des conditions de l'algorithme}
+On relie maintenant ces résultats à $P$.
+\paragraph{$\mu=P(c)$.} En évaluant~\eqref{eq:energie} à la limite $x\to-\infty$ :
+$\mu c^2+2G(c)=0$, donc $\mu=-2G(c)/c^2=P(c)$, et $P(c)=\mu>0$.
+\paragraph{$P'(c)=0$.} On calcule $P'(x)=-\dfrac{2xg(x)+4G(x)}{x^3}$\ ;
+en $x=c$, avec $g(c)=-\mu c$ et $G(c)=-\mu c^2/2$,
+\[
+  P'(c)=\frac{2\mu c^2-2\mu c^2}{c^3}=0.
+\]
+\paragraph{$P(x)<P(c)$ sur $]0,c[$.} Pour $x\in\,]0,c[$,
+\[
+  P(c)-P(x)=\mu+\frac{2G(x)}{x^2}=\frac{\mu x^2+2G(x)}{x^2}=\frac{f(x)}{x^2}>0
+\]
+par la Proposition~\ref{prop:fpos}. \medskip
+
+\noindent En résumé, toute solution de~\eqref{eq:edo} fournit un couple
+$(c,\mu=P(c))$ qui passe les trois tests : \emph{l'algorithme ne manque aucune
+solution}.
+
+% =========================================================================
+% 4. PARTIE 2 : SYNTHÈSE
+% =========================================================================
+\section{Partie 2 : Synthèse}
+\label{sec:synthese}
+
+On suppose désormais que $c,\mu>0$ vérifient les conditions (i)--(iii), et l'on
+\emph{construit} une solution.
+
+\subsection{Positivité de $f$ sous les nouvelles hypothèses}
+La condition (iii), $P(x)<P(c)=\mu$ sur $]0,c[$, s'écrit $-2G(x)/x^2<\mu$, soit
+\[
+  f(x)=\mu x^2+2G(x)>0\qquad\forall x\in\,]0,c[.
+\]
+La positivité de $f$ est donc une conséquence directe de l'hypothèse (iii).
+
+\subsection{Construction par séparation des variables}
+On cherche $Q$ vérifiant $Q'=-\sqrt{f(Q)}$. Pour $y\in\,]0,c[$, $f(y)>0$ donc
+$1/\sqrt{f(y)}$ est bien définie. Fixons $y_0\in\,]0,c[$ et posons
+\[
+  \Phi(y)=\int_{y_0}^{y}\frac{-\dd t}{\sqrt{f(t)}},\qquad y\in\,]0,c[.
+\]
+$\Phi$ est $\mathcal{C}^1$ et strictement décroissante. Étudions ses limites aux
+bords.
+\begin{itemize}[leftmargin=1.6em]
+  \item En $y\to0^+$ : $f(y)\sim\mu y^2$, donc $1/\sqrt{f(y)}\sim 1/(\sqrt{\mu}\,y)$,
+  non intégrable en $0$. Ainsi $\Phi(y)\to+\infty$.
+  \item En $y\to c^-$ : on a $f(c)=\mu c^2+2G(c)=0$ (car $\mu=P(c)$) et
+  $f'(c)=2(\mu c+g(c))=0$ (condition d'équilibre). Donc $f$ s'annule à l'ordre
+  $\ge2$ en $c$, et $1/\sqrt{f}$ n'est pas intégrable en $c$ : $\Phi(y)\to-\infty$.
+\end{itemize}
+$\Phi:\,]0,c[\,\to\R$ est donc une bijection. On pose $Q=\Phi^{-1}:\R\to\,]0,c[$.
+Par construction,
+\[
+  Q'(x)=-\sqrt{f(Q(x))},\qquad Q(-\infty)=c,\qquad Q(+\infty)=0.
+\]
+
+\subsection{$Q$ résout l'équation initiale}
+De $Q'^2=f(Q)$, on dérive : $2Q'Q''=f'(Q)Q'=(2\mu Q+2g(Q))Q'$. Comme
+$Q'=-\sqrt{f(Q)}\neq0$ sur $\R$, on simplifie :
+\[
+  Q''=\mu Q+g(Q)\quad\Longleftrightarrow\quad -Q''+\mu Q+g(Q)=0.
+\]
+Donc $Q$ est bien solution de~\eqref{eq:edo}.
+
+\begin{remarque}
+En combinant les Parties 1 et 2, on obtient l'équivalence complète : l'algorithme
+est \emph{nécessaire et suffisant}.
+\end{remarque}
+
+\subsection{Unicité à translation près}
+Soit $\widetilde Q$ une autre solution. Par l'analyse de la Partie 1,
+$\widetilde Q'=-\sqrt{f(\widetilde Q)}$. Puisque $Q:\R\to\,]0,c[$ est bijective,
+il existe un unique $a\in\R$ tel que $Q(a)=\widetilde Q(0)$. Les fonctions
+$x\mapsto\widetilde Q(x)$ et $x\mapsto Q(x+a)$ vérifient la même EDO d'ordre 1
+avec la même condition initiale en $0$ ; comme $u\mapsto-\sqrt{f(u)}$ est
+$\mathcal{C}^1$ sur $]0,c[$, Cauchy–Lipschitz donne
+$\widetilde Q(x)=Q(x+a)$ pour tout $x$.
+
+\begin{theoreme}[Résultat principal]
+Le problème~\eqref{eq:edo} admet une solution si et seulement s'il existe $c>0$
+tel que $P'(c)=0$, $P(c)>0$ et $P(x)<P(c)$ sur $[0,c[$ ; dans ce cas $\mu=P(c)$
+et la solution est unique à translation près.
+\end{theoreme}
+
+% =========================================================================
+% 5. PARTIE 3 : IMPLÉMENTATION
+% =========================================================================
+\section{Partie 3 : Implémentation numérique}
+\label{sec:numerique}
+
+\subsection{Objectif}
+On implémente deux fonctions Python :
+\begin{itemize}[leftmargin=1.6em]
+  \item \texttt{find\_c\_values(g)} : renvoie tous les couples $(c,\mu)$
+  satisfaisant l'algorithme pour une fonction $g$ donnée ;
+  \item \texttt{solve\_Q(g, c, mu)} : intègre numériquement
+  $Q'=-\sqrt{\mu Q^2+2G(Q)}$ et trace le profil.
+\end{itemize}
+
+\subsection{Choix d'un exemple correct : une non-linéarité bistable}
+\label{sec:exemple}
+Le choix de $g$ est crucial : toutes les fonctions ne produisent pas de front.
+Nous prenons
+\begin{equation}\label{eq:gtest}
+  g(t)=\tfrac12 t^3-\tfrac32 t^2,
+  \qquad\text{soit}\qquad
+  \mu y+g(y)=\tfrac12\,y(y-1)(y-2).
+\end{equation}
+Le terme de réaction est une cubique \emph{bistable} (zéros en $0$, $1$, $2$),
+caractéristique de l'équation d'Allen–Cahn. On vérifie $g(0)=g'(0)=0$, et
+\[
+  G(y)=\tfrac18 y^4-\tfrac12 y^3,\qquad
+  P(y)=-\frac{2G(y)}{y^2}=y-\frac{y^2}{4},\qquad P'(y)=1-\frac{y}{2}.
+\]
+Donc $P'(c)=0\Rightarrow c=2$, et $\mu=P(2)=1>0$ ; comme $P$ est une parabole de
+sommet $y=2$, la condition (iii) est satisfaite. L'algorithme renvoie
+\emph{exactement} $(c,\mu)=(2,1)$.
+
+\paragraph{Solution exacte.} Pour cette famille, $f(y)=\frac{\mu}{c^2}y^2(c-y)^2$,
+d'où $Q'=-\frac{\sqrt{\mu}}{c}Q(c-Q)$ (équation logistique). On intègre par
+séparation des variables :
+\begin{equation}\label{eq:exacte}
+  \boxed{\,Q(x)=\frac{c}{1+e^{\sqrt{\mu}\,(x-x_0)}}
+        =\frac{c}{2}\left(1-\tanh\frac{\sqrt{\mu}\,(x-x_0)}{2}\right).}
+\end{equation}
+Cette expression fermée servira de \emph{vérité terrain} pour valider le solveur.
+
+\subsection{Approche pour \texttt{find\_c\_values}}
+On échantillonne $[0,c_{\max}]$, on calcule $P$ par intégration numérique
+(\texttt{scipy.integrate.quad}), puis $P'$ par différences finies
+(\texttt{numpy.gradient}). Les \emph{maxima locaux intérieurs} de $P$ (passage de
+$P'>0$ à $P'<0$) sont les candidats ; pour chacun on vérifie (ii) et (iii). Les
+candidats détectés en double (deux points de grille voisins) sont fusionnés.
+
+\subsection{Approche pour \texttt{solve\_Q}}
+On intègre $Q'=-\sqrt{f(Q)}$ avec \texttt{solve\_ivp} (RK45) en partant du point
+milieu $Q(0)=c/2$, séparément vers la droite ($Q\to0$) et vers la gauche
+($Q\to c$). Comme $f$ admet un \emph{zéro double} à chaque bord, les paliers sont
+des asymptotes : aucune explosion numérique, contrairement à un mauvais choix de
+paramètres.
+
+\subsection{Code annoté (cœur algorithmique)}
+\noindent\textbf{Détection des paramètres :}
+\lstinputlisting[linerange={72-120}]{edo_solver.py}
+
+\noindent\textbf{Intégration du profil :}
+\lstinputlisting[linerange={126-149}]{edo_solver.py}
+
+\noindent Le script complet (fonctions $g$ et génération des figures comprises)
+est fourni dans le dépôt sous \texttt{edo\_solver.py}.
+
+\subsection{Résultats et illustrations}
+
+\paragraph{Détection des paramètres.}
+La figure~\ref{fig:P} montre $P$ pour l'exemple~\eqref{eq:gtest} : un unique
+maximum intérieur en $c=2$, donnant $\mu=1$. La zone ombrée illustre la
+condition (iii).
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.82\linewidth]{fig1_P_bistable.png}
+  \caption{Fonction $P$ pour $g(t)=\frac12 t^3-\frac32 t^2$. Le maximum intérieur
+  $c=2$ fournit $\mu=P(c)=1$. La zone verte matérialise $P(x)<P(c)$ sur $[0,c[$.}
+  \label{fig:P}
+\end{figure}
+
+\paragraph{Validation contre la solution exacte.}
+La figure~\ref{fig:exact} superpose la solution numérique et la formule
+exacte~\eqref{eq:exacte}. L'écart maximal mesuré est de l'ordre de
+$7\times10^{-10}$, ce qui valide l'implémentation.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.82\linewidth]{fig3_profil_vs_exact.png}
+  \caption{Profil numérique (RK45) \emph{vs.} solution exacte
+  $Q(x)=c/(1+e^{\sqrt{\mu}x})$ pour $(c,\mu)=(2,1)$. Écart maximal
+  $\approx 7\times10^{-10}$.}
+  \label{fig:exact}
+\end{figure}
+
+\paragraph{Profils pour deux non-linéarités.}
+La figure~\ref{fig:profils} donne les profils pour $(c,\mu)=(2,1)$ et
+$(c,\mu)=(3,4.5)$ (famille générale $R(y)=y(y-c/2)(y-c)$). Les deux fronts sont
+décroissants et atteignent leurs paliers.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.82\linewidth]{fig4_deux_profils.png}
+  \caption{Profils de transition pour deux non-linéarités bistables, avec les
+  valeurs de $c$ détectées automatiquement.}
+  \label{fig:profils}
+\end{figure}
+
+\paragraph{Lecture en plan de phase.}
+La figure~\ref{fig:phase} représente l'orbite hétérocline dans le plan $(Q,Q')$ :
+elle relie les deux équilibres $0$ et $c$, conformément à $Q'^2=f(Q)$.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.84\linewidth]{fig6_phase.png}
+  \caption{Plan de phase : l'orbite (en rouge) connecte les équilibres $0$ et $c$.
+  Le profil $Q$ correspond au parcours de cette trajectoire.}
+  \label{fig:phase}
+\end{figure}
+
+\paragraph{Invariance par translation.}
+La figure~\ref{fig:transl} illustre l'unicité à translation : toute translatée
+horizontale du front reste solution.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.84\linewidth]{fig5_translation.png}
+  \caption{Famille de solutions $Q(\cdot+a)$ pour $a\in\{-5,0,5\}$.}
+  \label{fig:transl}
+\end{figure}
+
+% =========================================================================
+% 6. REGARD CRITIQUE
+% =========================================================================
+\section{Regard critique et limites}
+
+\paragraph{Quand l'algorithme ne renvoie rien.}
+Un point essentiel, souvent négligé, est qu'\emph{une fonction $g$ arbitraire ne
+donne pas de front}. Le contre-exemple $g(t)=-t^3$ l'illustre : alors
+$G(y)=-y^4/4$ et $P(x)=x^2/2$, strictement croissante, donc $P'(c)=0$ n'a
+\emph{aucune} solution $c>0$ (figure~\ref{fig:echec}). L'algorithme renvoie
+correctement la liste vide, et de fait le problème n'admet pas de solution :
+en plan de phase, l'origine n'est pas connectée à un second équilibre. Ce
+comportement, loin d'être un défaut, confirme la \emph{nécessité} démontrée en
+Partie 1.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.84\linewidth]{fig2_P_echec.png}
+  \caption{Pour $g(t)=-t^3$, $P$ est monotone : pas de maximum intérieur, donc
+  aucun couple $(c,\mu)$ admissible. L'algorithme renvoie une liste vide.}
+  \label{fig:echec}
+\end{figure}
+
+\paragraph{Limites de la méthode numérique.}
+\begin{itemize}[leftmargin=1.6em]
+  \item La détection des maxima de $P$ repose sur une grille : un maximum très
+  pointu ou hors de $[0,c_{\max}]$ peut être manqué. Le paramètre $c_{\max}$ doit
+  être choisi avec discernement.
+  \item L'intégration de $Q'=-\sqrt{f(Q)}$ près des paliers est sensible car
+  $f\to0$ ; on s'appuie sur le caractère asymptotique (zéro double) pour éviter
+  les instabilités, mais une tolérance trop lâche dégraderait la précision.
+  \item L'estimation de $P'$ par différences finies est bruitée ; une approche
+  plus robuste utiliserait une dérivation analytique de $P$ lorsque $g$ est connue
+  explicitement.
+\end{itemize}
+
+\paragraph{Pistes d'approfondissement.} On pourrait étudier le cas
+\emph{non symétrique} (puits de profondeurs différentes), qui fait apparaître une
+vitesse de propagation non nulle, ou balayer systématiquement une famille
+paramétrée de fonctions $g$ pour cartographier l'existence des fronts.
+
+\subsection{Étude de convergence}
+Pour quantifier la fiabilité de la détection, on mesure l'erreur entre le
+$c$ renvoyé par \texttt{find\_c\_values} et la valeur exacte $c=2$, en fonction
+de la finesse de la grille $n_{\text{grid}}$ (Table~\ref{tab:conv}). L'erreur
+décroît régulièrement, approximativement comme $1/n_{\text{grid}}$, ce qui est
+cohérent avec l'estimation de $P'$ par différences finies. Par ailleurs, la
+solution de \texttt{solve\_Q} reste précise à $\sim10^{-9}$ près quel que soit le
+pas, la tolérance \texttt{rtol} du solveur étant le facteur limitant.
+
+\begin{table}[h]
+  \centering
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{rcc}
+    \toprule
+    $n_{\text{grid}}$ & $c$ détecté & erreur $|c-2|$\\
+    \midrule
+    200   & 1.98553 & $1.5\times10^{-2}$\\
+    500   & 1.99459 & $5.4\times10^{-3}$\\
+    1000  & 1.99760 & $2.4\times10^{-3}$\\
+    2000  & 1.99910 & $9.0\times10^{-4}$\\
+    4000  & 1.99985 & $1.5\times10^{-4}$\\
+    \bottomrule
+  \end{tabular}
+  \caption{Convergence de la détection de $c$ vers la valeur exacte $2$
+  lorsqu'on raffine la grille. L'erreur est divisée par $\sim2$ à chaque
+  doublement de $n_{\text{grid}}$.}
+  \label{tab:conv}
+\end{table}
+
+% =========================================================================
+% 6 bis. APPROFONDISSEMENT
+% =========================================================================
+\section{Approfondissement : rupture de symétrie et vitesse de front}
+\label{sec:nonsym}
+
+\subsection{Pourquoi la symétrie est nécessaire}
+Notre problème impose un front \emph{stationnaire} (indépendant du temps). Or,
+d'après le paragraphe~\ref{sec:maxwell}, ceci n'est possible que si la condition
+de Maxwell $\int_0^c R(y)\dd y=0$ est vérifiée. Pour la famille cubique
+$R(y)=\beta\,y(y-a)(y-c)$, un calcul direct donne
+\[
+  \int_0^c R(y)\dd y=\beta\,c^3\,\frac{2a-c}{6},
+\]
+qui s'annule \emph{si et seulement si} $a=\dfrac{c}{2}$. C'est exactement le cas
+symétrique retenu dans~\eqref{eq:gtest} ($a=1$, $c=2$). Dès que $a\neq c/2$, le
+front stationnaire n'existe plus : l'algorithme renvoie alors une liste vide,
+ce qui est cohérent avec la théorie.
+
+\subsection{Ce que devient le front quand $a\neq c/2$}
+Lorsque les deux puits n'ont pas la même profondeur, l'équation d'évolution
+$u_t=u_{xx}-R(u)$ admet non pas un front fixe, mais un \emph{front mobile}
+$u(t,x)=U(x-\nu t)$ de vitesse $\nu\neq0$. Le profil $U$ vérifie alors
+\[
+  U''+\nu U'-R(U)=0.
+\]
+En multipliant par $U'$ et en intégrant sur $\R$ (avec $U'(\pm\infty)=0$), le
+terme $\int_\R U'U''$ s'annule et il reste
+\[
+  \nu\int_\R U'(\xi)^2\dd\xi=-\int_0^c R(y)\dd y.
+\]
+Comme $\int_\R U'^2>0$, le \emph{signe de la vitesse} $\nu$ est l'opposé de celui
+de l'aire $\int_0^c R$ : la phase « énergétiquement la plus profonde » envahit
+l'autre. On retrouve $\nu=0$ exactement au point d'équilibre des aires, c'est-à-dire
+la condition de Maxwell. Ce résultat, dû à Fife et McLeod~\cite{fifemcleod1977},
+montre que notre problème stationnaire est le cas \emph{critique} d'un phénomène
+plus général de propagation de fronts.
+
+\subsection{Lien avec la classification des équilibres}
+Du point de vue du plan de phase (figure~\ref{fig:phase}), les équilibres $0$ et
+$c$ sont des \emph{points selles} de l'EDO d'ordre 2, tandis que l'équilibre
+intermédiaire ($y=1$ dans notre exemple) est un \emph{centre}. Le front
+stationnaire correspond à l'unique orbite reliant les deux selles : une
+\emph{connexion hétérocline}. Cette lecture géométrique rejoint l'analyse de
+stabilité des transitions de phase et éclaire pourquoi la solution est unique à
+translation près (l'orbite hétérocline est unique, seul le paramétrage temporel
+est libre).
+
+% =========================================================================
+% 7. CONCLUSION
+% =========================================================================
+\section{Conclusion}
+
+Ce projet a établi de manière complète l'existence et l'unicité (à translation
+près) des solutions de l'EDO~\eqref{eq:edo}, et caractérisé les paramètres
+admissibles via la fonction $P$. Les outils clés ont été la \emph{conservation de
+l'énergie} (réduction à l'ordre 1), le \emph{théorème de Cauchy–Lipschitz}
+(unicité et non-annulation de $f$) et la \emph{séparation des variables}
+(construction explicite). L'implémentation Python, \emph{validée contre une
+solution exacte} au niveau $10^{-10}$, confirme la théorie et visualise les
+profils. Enfin, le rattachement à l'équation d'Allen–Cahn place ce travail dans
+le cadre plus large des fronts de réaction–diffusion.
+
+\paragraph{Organisation du travail.}
+Le projet a été mené en équipe de cinq. La partie théorique (Parties 1 et 2) a
+fait l'objet d'un travail collectif, chaque membre rédigeant et vérifiant un
+sous-ensemble des propositions ; la preuve corrigée de la
+Proposition~\ref{prop:fpos} a notamment été reprise ensemble après une première
+version erronée. L'implémentation Python (Partie 3), la validation contre la
+solution exacte et la production des figures ont été réalisées en binôme, le
+reste de l'équipe assurant la relecture du code et la rédaction de l'état de
+l'art, de l'approfondissement et de l'annexe. La mise en forme \LaTeX{} et
+l'harmonisation finale ont été partagées.
+
+% =========================================================================
+% ANNEXE
+% =========================================================================
+\clearpage
+\appendix
+\section{Annexe : calcul explicite de la solution exacte}
+\label{sec:annexe}
+
+Dans le cas bistable~\eqref{eq:gtest}, l'EDO se résout \emph{à la main} et
+fournit une solution en forme fermée. C'est cette solution qui sert de
+\emph{référence exacte} pour valider l'implémentation numérique
+(figure~\ref{fig:exact}). On détaille ici les quatre étapes du calcul, puis on
+vérifie que la fonction obtenue est bien solution du problème de départ.
+
+\subsection*{Étape 1 — Forme factorisée de $f$}
+On part de $g(t)=\dfrac12 t^3-\dfrac32 t^2$, avec les paramètres détectés
+$\mu=1$ et $c=2$. La primitive est
+\[
+  G(y)=\int_0^y\!\Big(\tfrac12 t^3-\tfrac32 t^2\Big)\dd t
+       =\frac{1}{8}y^4-\frac{1}{2}y^3,
+\]
+d'où
+\[
+  f(y)=\mu y^2+2G(y)=y^2-y^3+\frac{1}{4}y^4
+      =\frac{1}{4}\,y^2\,(y-2)^2
+      =\frac{\mu}{c^2}\,y^2\,(c-y)^2.
+\]
+On retrouve la structure annoncée : $f$ possède un \textbf{zéro double} en $0$
+et en $c$, et reste strictement positive entre les deux. Sur $]0,c[$,
+\[
+  \sqrt{f(y)}=\frac{\sqrt{\mu}}{c}\,y\,(c-y).
+\]
+
+\subsection*{Étape 2 — Réduction à une équation à variables séparables}
+L'EDO d'ordre 1 issue de l'énergie, $Q'=-\sqrt{f(Q)}$, s'écrit
+\[
+  \frac{\dd Q}{\dd x}=-\frac{\sqrt{\mu}}{c}\,Q\,(c-Q),
+\]
+soit, en séparant les variables (licite car $Q\in\,]0,c[$ donne $Q(c-Q)>0$),
+\[
+  \frac{\dd Q}{Q\,(c-Q)}=-\frac{\sqrt{\mu}}{c}\,\dd x.
+\]
+
+\subsection*{Étape 3 — Décomposition en éléments simples et intégration}
+On décompose la fraction de gauche :
+\[
+  \frac{1}{Q\,(c-Q)}=\frac{1}{c}\left(\frac{1}{Q}+\frac{1}{c-Q}\right).
+\]
+En intégrant membre à membre,
+\[
+  \frac{1}{c}\Big(\ln Q-\ln(c-Q)\Big)
+  =-\frac{\sqrt{\mu}}{c}\,x+\text{cste},
+\]
+c'est-à-dire, après multiplication par $c$ et en notant $x_0$ la constante,
+\[
+  \ln\!\frac{Q}{c-Q}=-\sqrt{\mu}\,(x-x_0).
+\]
+
+\subsection*{Étape 4 — Inversion}
+En exponentiant puis en isolant $Q$ :
+\[
+  \frac{Q}{c-Q}=e^{-\sqrt{\mu}\,(x-x_0)}
+  \;\Longrightarrow\;
+  Q=\big(c-Q\big)\,e^{-\sqrt{\mu}\,(x-x_0)}
+  \;\Longrightarrow\;
+  \boxed{\,Q(x)=\frac{c}{1+e^{\sqrt{\mu}\,(x-x_0)}}
+        =\frac{c}{2}\Big(1-\tanh\frac{\sqrt{\mu}}{2}(x-x_0)\Big).}
+\]
+La constante $x_0$ paramètre la position du front : c'est exactement
+l'\emph{invariance par translation} démontrée au paragraphe~3.4.
+
+\subsection*{Vérification}
+On contrôle que $Q$ résout bien le problème initial~\eqref{eq:edo}.
+\begin{itemize}[leftmargin=1.6em]
+  \item \textbf{Conditions aux limites.} Quand $x\to-\infty$, l'exponentielle
+  tend vers $0$ donc $Q\to c$ ; quand $x\to+\infty$, elle tend vers $+\infty$
+  donc $Q\to0$. \checkmark
+  \item \textbf{Équation différentielle.} Posons $\sigma=\sqrt{\mu}$. En dérivant
+  la forme logistique, $Q'=-\dfrac{\sigma}{c}\,Q(c-Q)$, puis
+  \[
+    Q''=-\frac{\sigma}{c}\,(c-2Q)\,Q'
+       =\frac{\sigma^2}{c^2}\,Q\,(c-Q)\,(c-2Q).
+  \]
+  Avec $\mu=1$, $c=2$ : $Q''=\tfrac14 Q(2-Q)(2-2Q)=\tfrac12 Q(Q-1)(Q-2)$, qui est
+  précisément $\mu Q+g(Q)=\tfrac12 Q(Q-1)(Q-2)$. Donc $-Q''+\mu Q+g(Q)=0$.
+  \checkmark
+\end{itemize}
+La fonction~\eqref{eq:exacte} est donc rigoureusement solution, ce qui légitime
+son emploi comme vérité terrain pour mesurer l'erreur du solveur.
+
+% =========================================================================
+% BIBLIOGRAPHIE
+% =========================================================================
+\clearpage
+\begin{thebibliography}{9}
+\addcontentsline{toc}{section}{Références}
+
+\bibitem{allencahn1979}
+S.~M. Allen et J.~W. Cahn,
+\emph{A microscopic theory for antiphase boundary motion and its application to
+antiphase domain coarsening}, Acta Metallurgica, \textbf{27}(6):1085--1095, 1979.
+
+\bibitem{fifemcleod1977}
+P.~C. Fife et J.~B. McLeod,
+\emph{The approach of solutions of nonlinear diffusion equations to travelling
+front solutions}, Archive for Rational Mechanics and Analysis,
+\textbf{65}(4):335--361, 1977.
+
+\bibitem{aronsonweinberger1978}
+D.~G. Aronson et H.~F. Weinberger,
+\emph{Multidimensional nonlinear diffusion arising in population genetics},
+Advances in Mathematics, \textbf{30}(1):33--76, 1978.
+
+\bibitem{kpp1937}
+A.~Kolmogorov, I.~Petrovsky et N.~Piskunov,
+\emph{Étude de l'équation de la diffusion avec croissance de la quantité de
+matière et son application à un problème biologique}, Bull. Univ. Moscou,
+Sér. Int. A, \textbf{1}:1--25, 1937.
+
+\bibitem{nagumo1962}
+J.~Nagumo, S.~Arimoto et S.~Yoshizawa,
+\emph{An active pulse transmission line simulating nerve axon},
+Proceedings of the IRE, \textbf{50}(10):2061--2070, 1962.
+
+\bibitem{evans2010}
+L.~C. Evans,
+\emph{Partial Differential Equations}, Graduate Studies in Mathematics, vol.~19,
+American Mathematical Society, 2\textsuperscript{e} édition, 2010.
+
+\bibitem{strogatz2015}
+S.~H. Strogatz,
+\emph{Nonlinear Dynamics and Chaos}, Westview Press,
+2\textsuperscript{e} édition, 2015.
+
+\end{thebibliography}
+
+\end{document}
